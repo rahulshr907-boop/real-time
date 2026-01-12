@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { Header } from './components/Header';
 import { EntryForm } from './components/EntryForm';
 import { EntryList } from './components/EntryList';
@@ -7,17 +8,13 @@ import { OwnerDetailsModal } from './components/OwnerDetailsModal';
 import { ContactModal } from './components/ContactModal';
 import { AboutModal } from './components/AboutModal';
 import { HelpModal } from './components/HelpModal';
-import { EmergencyModal } from './components/EmergencyModal';
 import { Notebook } from './components/Notebook';
 import { UserManagementModal } from './components/UserManagementModal';
-import { DaiNumberModal } from './components/DaiNumberModal';
-import { DaiEntryModal } from './components/DaiEntryModal';
-import { Theme, InventoryEntry, User, AppSettings, DaiEntry, DaiEntryStatus } from './types';
+import { Theme, InventoryEntry, User, AppSettings } from './types';
 import { storageService } from './services/storageService';
 import { 
   Plus, List, Trash2, 
-  ArrowLeft, BookOpen, LayoutGrid, IndianRupee,
-  MoreVertical, Hash, Download, Upload
+  ArrowLeft, BookOpen, LayoutGrid, IndianRupee 
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -49,26 +46,17 @@ const App: React.FC = () => {
   );
 
   const [entries, setEntries] = useState<InventoryEntry[]>([]);
-  const [daiEntries, setDaiEntries] = useState<DaiEntry[]>([]); // New state for Tasks
-  
   const [view, setView] = useState<'form' | 'list' | 'trash'>('form');
   const [showBilling, setShowBilling] = useState(false);
   const [showOwnerDetails, setShowOwnerDetails] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
-  const [showEmergency, setShowEmergency] = useState(false);
   const [showNotebook, setShowNotebook] = useState(false);
   const [showUserManager, setShowUserManager] = useState(false);
-  const [showDaiNumber, setShowDaiNumber] = useState(false);
-  const [showDaiEntry, setShowDaiEntry] = useState(false);
   
   // Rate state
   const [billingRate, setBillingRate] = useState(0);
-
-  // Vault Menu State
-  const [isVaultMenuOpen, setIsVaultMenuOpen] = useState(false);
-  const importInputRef = useRef<HTMLInputElement>(null);
 
   // --- Effects ---
   useEffect(() => {
@@ -83,8 +71,8 @@ const App: React.FC = () => {
   }, [settings, users, currentUserId]);
 
   useEffect(() => {
-    setEntries(storageService.getEntries());
-    setDaiEntries(storageService.getDaiEntries());
+    const saved = storageService.getEntries();
+    setEntries(saved);
   }, []);
 
   useEffect(() => {
@@ -92,8 +80,7 @@ const App: React.FC = () => {
   }, [currentUserId]);
 
   // --- Logical Computations ---
-  const activeUsers = useMemo(() => users.filter(u => !u.isDeleted), [users]);
-  const activeUser = useMemo(() => activeUsers.find(u => u.id === currentUserId) || activeUsers[0] || users[0], [activeUsers, currentUserId, users]);
+  const activeUser = useMemo(() => users.find(u => u.id === currentUserId) || users[0], [users, currentUserId]);
 
   const filteredEntries = useMemo(() => {
     return entries
@@ -104,14 +91,6 @@ const App: React.FC = () => {
   const trashedEntries = useMemo(() => {
     return entries.filter(e => e.userId === currentUserId && e.isDeleted);
   }, [entries, currentUserId]);
-
-  const trashedUsers = useMemo(() => {
-    return users.filter(u => u.isDeleted);
-  }, [users]);
-
-  const trashedDaiEntries = useMemo(() => {
-    return daiEntries.filter(e => e.status === 'trash');
-  }, [daiEntries]);
 
   const totalWeight = useMemo(() => {
     return filteredEntries.reduce((acc, curr) => acc + curr.weight, 0);
@@ -138,195 +117,18 @@ const App: React.FC = () => {
   };
 
   const handleAction = (id: string, action: 'delete' | 'restore' | 'permanent') => {
-    if (action === 'restore') {
-       const updated = entries.map(e => e.id === id ? { ...e, isDeleted: false } : e);
-       setEntries(updated);
-       storageService.saveEntries(updated);
-       return;
-    }
-
-    if (action === 'delete') {
-        // Soft Delete (Move to Recycle Bin) - Instant Action, No Confirmation
-        const updated = entries.map(e => e.id === id ? { ...e, isDeleted: true } : e);
-        setEntries(updated);
-        storageService.saveEntries(updated);
-    } else {
-        // Permanent Delete - Removed confirmation for individual item speed
-        const updated = entries.filter(e => e.id !== id);
-        setEntries(updated);
-        storageService.saveEntries(updated);
-        
-        // If we were in trash view and it's empty now, go back to list
-        if (view === 'trash' && trashedEntries.length <= 1 && trashedUsers.length === 0 && trashedDaiEntries.length === 0) {
-            setView('list');
-        }
-    }
-  };
-
-  const handleUserAction = (id: string, action: 'restore' | 'permanent') => {
-    if (action === 'restore') {
-      setUsers(users.map(u => u.id === id ? { ...u, isDeleted: false } : u));
-    } else {
-      // Permanent Delete - Removed confirmation
-      setUsers(users.filter(u => u.id !== id));
-    }
-  };
-
-  const handleDaiAction = (id: string, action: 'restore' | 'permanent') => {
-    if (action === 'restore') {
-        const updated = daiEntries.map(e => e.id === id ? { ...e, status: 'waiting' as DaiEntryStatus } : e);
-        setDaiEntries(updated);
-        storageService.saveDaiEntries(updated);
-    } else {
-        // Permanent Delete - Removed confirmation for individual item speed
-        const updated = daiEntries.filter(e => e.id !== id);
-        setDaiEntries(updated);
-        storageService.saveDaiEntries(updated);
-    }
-  };
-
-  const handleEmptyTrash = () => {
-     const hasTrash = trashedEntries.length > 0 || trashedUsers.length > 0 || trashedDaiEntries.length > 0;
-     if (!hasTrash) return;
-
-     if (window.confirm("WARNING: You are about to empty the Recycle Bin.\n\nAll items in the bin (Inventory, Users, Tasks) will be permanently deleted.\nThis action cannot be undone.\n\nProceed?")) {
-        
-        // 1. Inventory
-        const newEntries = entries.filter(e => !(e.userId === currentUserId && e.isDeleted));
-        setEntries(newEntries);
-        storageService.saveEntries(newEntries);
-
-        // 2. Users
-        const newUsers = users.filter(u => !u.isDeleted);
-        setUsers(newUsers);
-
-        // 3. Dai Entries
-        const newDaiEntries = daiEntries.filter(e => e.status !== 'trash');
-        setDaiEntries(newDaiEntries);
-        storageService.saveDaiEntries(newDaiEntries);
-
-        setView('list');
-     }
+    let updated;
+    if (action === 'delete') updated = entries.map(e => e.id === id ? { ...e, isDeleted: true } : e);
+    else if (action === 'restore') updated = entries.map(e => e.id === id ? { ...e, isDeleted: false } : e);
+    else updated = entries.filter(e => e.id !== id);
+    
+    setEntries(updated);
+    storageService.saveEntries(updated);
   };
 
   const handleSaveRate = (rate: number) => {
     storageService.saveBillingRate(currentUserId, rate);
     setBillingRate(rate);
-  };
-
-  const handleExportData = () => {
-    // Gather all data from the application
-    const fullData = {
-      metadata: {
-        version: '2.0',
-        timestamp: Date.now(),
-        type: 'PRO_JEWELLERY_FULL_BACKUP'
-      },
-      data: {
-        entries: storageService.getEntries(),
-        notes: storageService.getNotes(),
-        daiImages: storageService.getDaiImages(),
-        daiEntries: storageService.getDaiEntries(),
-        emergencyContacts: storageService.getEmergencyContacts(),
-        users: JSON.parse(localStorage.getItem('app_users') || '[]'),
-        settings: JSON.parse(localStorage.getItem('app_settings') || '{}'),
-        billingRates: JSON.parse(localStorage.getItem('precision_billing_rates') || '{}'),
-        aboutPhoto: localStorage.getItem('app_about_photo'),
-        helpPhoto: localStorage.getItem('app_help_photo')
-      }
-    };
-
-    const dataStr = JSON.stringify(fullData, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `pro_jewellery_full_backup_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setIsVaultMenuOpen(false);
-  };
-
-  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        try {
-          const content = event.target?.result as string;
-          const parsed = JSON.parse(content);
-          
-          let importData = parsed;
-          let isLegacy = true;
-
-          // Check if new format
-          if (parsed.metadata && parsed.metadata.type === 'PRO_JEWELLERY_FULL_BACKUP' && parsed.data) {
-             importData = parsed.data;
-             isLegacy = false;
-          }
-
-          if (isLegacy) {
-              // Handle legacy array import (Inventory Entries only)
-              if (Array.isArray(parsed)) {
-                  if(window.confirm(`Legacy Backup Detected. Importing ${parsed.length} entries will merge with your current list. Proceed?`)) {
-                      const current = storageService.getEntries();
-                      const existingIds = new Set(current.map(e => e.id));
-                      const toAdd = parsed.filter((e: any) => !existingIds.has(e.id));
-                      const merged = [...current, ...toAdd];
-                      
-                      setEntries(merged);
-                      storageService.saveEntries(merged);
-                      alert(`Legacy Import Successful: Added ${toAdd.length} new entries.`);
-                  }
-              } else {
-                  alert("Invalid file format.");
-              }
-          } else {
-              // Handle Full System Import
-              if(window.confirm(`Full System Backup Detected.\n\nThis will merge new data into your existing records:\n• Inventory & DAI Records\n• Notes & Contacts\n• Users & Settings\n\nExisting data will NOT be overwritten. Proceed?`)) {
-                  
-                  // Import logic... (Similar to existing)
-                  if (Array.isArray(importData.entries)) {
-                      const current = storageService.getEntries();
-                      const existingIds = new Set(current.map(e => e.id));
-                      const toAdd = importData.entries.filter((e: any) => !existingIds.has(e.id));
-                      const merged = [...current, ...toAdd];
-                      setEntries(merged);
-                      storageService.saveEntries(merged);
-                  }
-                  
-                  if (Array.isArray(importData.daiEntries)) {
-                      const current = storageService.getDaiEntries();
-                      const existingIds = new Set(current.map(e => e.id));
-                      const toAdd = importData.daiEntries.filter((e: any) => !existingIds.has(e.id));
-                      const merged = [...current, ...toAdd];
-                      setDaiEntries(merged); // Update state too
-                      storageService.saveDaiEntries(merged);
-                  }
-
-                  // ... other imports ...
-
-                  // Refresh Users state
-                  if (Array.isArray(importData.users)) {
-                    const current = users;
-                    const existingIds = new Set(current.map(u => u.id));
-                    const toAdd = importData.users.filter((u: any) => !existingIds.has(u.id));
-                    setUsers([...current, ...toAdd]);
-                  }
-                  
-                  alert(`Full Import Successful! All data has been updated.`);
-              }
-          }
-        } catch (err) {
-          console.error(err);
-          alert("Error parsing the file. Please ensure it is a valid backup file.");
-        }
-      };
-      reader.readAsText(file);
-    }
-    setIsVaultMenuOpen(false);
-    if(importInputRef.current) importInputRef.current.value = '';
   };
 
   return (
@@ -335,7 +137,7 @@ const App: React.FC = () => {
       <Header 
         theme={theme} setTheme={setTheme} 
         settings={settings} setSettings={setSettings}
-        users={activeUsers} currentUserId={currentUserId}
+        users={users} currentUserId={currentUserId}
         setCurrentUserId={setCurrentUserId}
         onAddUser={(name) => {
           const newUser = { id: crypto.randomUUID(), name };
@@ -344,13 +146,12 @@ const App: React.FC = () => {
         }}
         onUpdateUser={(u) => setUsers(users.map(user => user.id === u.id ? u : user))}
         onViewTrash={() => setView('trash')}
-        trashCount={trashedEntries.length + trashedUsers.length + trashedDaiEntries.length}
+        trashCount={trashedEntries.length}
         onSetView={setView}
         onShowOwnerDetails={() => setShowOwnerDetails(true)}
         onShowContact={() => setShowContact(true)}
         onShowAbout={() => setShowAbout(true)}
         onShowHelp={() => setShowHelp(true)}
-        onShowEmergency={() => setShowEmergency(true)}
         onManageUsers={() => setShowUserManager(true)}
       />
 
@@ -412,7 +213,7 @@ const App: React.FC = () => {
 
         <div className="transition-all duration-300">
           {view === 'form' ? (
-            <EntryForm onSubmit={handleAddEntry} currentUserId={currentUserId} users={activeUsers} />
+            <EntryForm onSubmit={handleAddEntry} currentUserId={currentUserId} users={users} />
           ) : (
             <EntryList 
               entries={view === 'list' ? filteredEntries : trashedEntries} 
@@ -421,11 +222,6 @@ const App: React.FC = () => {
               onRestore={(id) => handleAction(id, 'restore')}
               onUpdate={handleUpdateEntry}
               currentUser={activeUser}
-              trashedUsers={trashedUsers}
-              onUserAction={handleUserAction}
-              trashedDaiEntries={trashedDaiEntries}
-              onDaiAction={handleDaiAction}
-              onEmptyTrash={handleEmptyTrash}
             />
           )}
         </div>
@@ -434,7 +230,7 @@ const App: React.FC = () => {
       <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-2 p-2 bg-slate-900/95 backdrop-blur-2xl rounded-[2.5rem] shadow-2xl border border-white/5 z-[60]">
         <button
           onClick={() => setView('form')}
-          className={`flex items-center gap-3 px-6 py-5 rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.2em] transition-all duration-300 ${
+          className={`flex items-center gap-3 px-10 py-5 rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.2em] transition-all duration-300 ${
             view === 'form' ? 'bg-orange-600 text-white shadow-xl shadow-orange-600/30' : 'text-slate-400 hover:text-white'
           }`}
         >
@@ -442,51 +238,12 @@ const App: React.FC = () => {
         </button>
         <button
           onClick={() => setView('list')}
-          className={`flex items-center gap-3 px-6 py-5 rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.2em] transition-all duration-300 ${
+          className={`flex items-center gap-3 px-10 py-5 rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.2em] transition-all duration-300 ${
             view === 'list' ? 'bg-orange-600 text-white shadow-xl shadow-orange-600/30' : 'text-slate-400 hover:text-white'
           }`}
         >
           <List size={18} /> Vault
         </button>
-        
-        {/* Menu Button Container */}
-        <div className="relative">
-            {isVaultMenuOpen && (
-               <>
-                 <div className="fixed inset-0 z-0" onClick={() => setIsVaultMenuOpen(false)}></div>
-                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-white/5 overflow-hidden z-20 animate-in fade-in slide-in-from-bottom-2 p-2 flex flex-col gap-1">
-                    <button onClick={() => { setIsVaultMenuOpen(false); setShowDaiNumber(true); }} className="w-full text-left px-4 py-3 text-[10px] font-black text-slate-700 dark:text-slate-300 hover:bg-orange-50 dark:hover:bg-white/5 hover:text-orange-600 rounded-xl transition-colors uppercase tracking-widest flex items-center gap-3">
-                       <Hash size={14} className="text-orange-400" /> DAI NUMBER
-                    </button>
-                    <button onClick={() => { setIsVaultMenuOpen(false); setShowDaiEntry(true); }} className="w-full text-left px-4 py-3 text-[10px] font-black text-slate-700 dark:text-slate-300 hover:bg-orange-50 dark:hover:bg-white/5 hover:text-orange-600 rounded-xl transition-colors uppercase tracking-widest flex items-center gap-3">
-                       <Plus size={14} className="text-orange-400" /> DAI ENTRY
-                    </button>
-                    <div className="h-px bg-slate-100 dark:bg-white/5 mx-2"></div>
-                    <button onClick={handleExportData} className="w-full text-left px-4 py-3 text-[10px] font-black text-slate-700 dark:text-slate-300 hover:bg-orange-50 dark:hover:bg-white/5 hover:text-orange-600 rounded-xl transition-colors uppercase tracking-widest flex items-center gap-3">
-                       <Download size={14} className="text-blue-400" /> EXPORT DATA
-                    </button>
-                    <button onClick={() => importInputRef.current?.click()} className="w-full text-left px-4 py-3 text-[10px] font-black text-slate-700 dark:text-slate-300 hover:bg-orange-50 dark:hover:bg-white/5 hover:text-orange-600 rounded-xl transition-colors uppercase tracking-widest flex items-center gap-3">
-                       <Upload size={14} className="text-green-400" /> IMPORT DATA
-                    </button>
-                 </div>
-               </>
-            )}
-            <button
-              onClick={() => setIsVaultMenuOpen(!isVaultMenuOpen)}
-              className={`flex items-center gap-3 px-6 py-5 rounded-[1.8rem] font-black text-[10px] uppercase tracking-[0.2em] transition-all duration-300 ${
-                isVaultMenuOpen ? 'bg-orange-600 text-white shadow-xl shadow-orange-600/30' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <MoreVertical size={18} /> Menu
-            </button>
-        </div>
-        <input 
-            type="file" 
-            ref={importInputRef} 
-            className="hidden" 
-            accept=".json" 
-            onChange={handleImportData}
-        />
       </nav>
 
       {showBilling && activeUser && (
@@ -515,20 +272,10 @@ const App: React.FC = () => {
           onSaveRate={handleSaveRate}
         />
       )}
-      {showDaiNumber && (
-        <DaiNumberModal onClose={() => setShowDaiNumber(false)} />
-      )}
-      {showDaiEntry && (
-        <DaiEntryModal onClose={() => {
-            setShowDaiEntry(false);
-            setDaiEntries(storageService.getDaiEntries()); // Refresh tasks on close
-        }} />
-      )}
       {showOwnerDetails && <OwnerDetailsModal onClose={() => setShowOwnerDetails(false)} />}
       {showContact && <ContactModal onClose={() => setShowContact(false)} />}
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-      {showEmergency && <EmergencyModal onClose={() => setShowEmergency(false)} />}
 
     </div>
   );

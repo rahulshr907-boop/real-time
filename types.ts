@@ -8,7 +8,6 @@ export interface User {
   phone?: string;
   address?: string;
   email?: string;
-  isDeleted?: boolean;
 }
 
 export interface AppSettings {
@@ -34,29 +33,4 @@ export interface Note {
   id: string;
   content: string;
   timestamp: number;
-}
-
-export interface EmergencyContact {
-  id: string;
-  name: string;
-  number: string;
-}
-
-export interface DaiImage {
-  id: string;
-  url: string;
-  title: string;
-  timestamp: number;
-}
-
-export type DaiEntryStatus = 'waiting' | 'out' | 'in' | 'trash';
-
-export interface DaiEntry {
-  id: string;
-  diNumber: string;
-  date: string;
-  details: string;
-  photo?: string;
-  createdAt: number;
-  status: DaiEntryStatus;
 }
